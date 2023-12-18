@@ -1,0 +1,190 @@
+---
+title: "Métodos de suavizado"
+subtitle: ""
+author:
+  - name: "Técnicas de Smoothing aplicadas a Series Temporales de Precios de Acciones"
+    affiliation: Enfoque Estadístico del Aprendizaje - Universidad de Buenos Aires
+date: "`r format(Sys.time(), '%d %B %Y')`"
+lang: es
+description: "Asignatura: Enfoque Estadístico del Aprendizaje - Buenos Aires Argentina"
+output:
+  html_document:
+    page_layout: full
+    df_print: paged
+    code_folding: show
+    code_line-_numbers: false
+    code_tools: true
+    code_overflow: scroll
+    theme: cerulean
+    number_sections: true
+    highlight: pygments
+    tidy: true
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    toc-location: left
+    css: doc.css
+    grid:
+      body_width: 2000px
+      sidebar_width: 200px
+      margin_width: 200px
+website:
+  sidebar:
+      style: docked
+      search: false
+execute:
+  echo: false
+  warning: false
+  freeze: auto
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+A continuación instalaremos el paquete **quantmod**, necesario para obtener los valores históricos de una acción:
+
+```{r, message=FALSE, warning=FALSE}
+if (!require("quantmod")) install.packages("quantmod")
+```
+
+La información es obtenida a partir de Yahoo Finance.Se debe especificar el periodo de tiempo que se quiere analizar. El resultado es una tabla con los precios de apertura y cierre del mercado, minimo y máximo alcanzado para cada día dentro del periodo especificado; además de otra información como el volumen de transacciones realizadas.
+
+```{r}
+library(quantmod)
+# Símbolo de la acción que se desea obtener (por ejemplo, "AAPL" para Apple)
+symbol <- "GOOGL"
+
+# Especifica el periodo deseado (por ejemplo, desde el 1 de enero de 2021 
+#hasta el 31 de diciembre de 2021)
+start_date <- "2023-07-01"
+end_date <- "2023-12-18"
+
+# Descarga la información de la acción para el periodo especificado
+stock <- getSymbols(symbol, src = "yahoo", from = start_date, to = end_date, auto.assign = F)
+
+# Muestra las primeras filas de los datos
+head(stock)
+```
+
+
+
+## Graficos de la variación del precio
+
+**quantmod** incluye una función para realizar este tipo de graficos en donde se incluye un histograma con el volumen de transacciones. Este gráfico se conoce como _gráfico de velas_ y resume toda información relacionada con el precio del activo: el cuerpo de la vela marca los valores de apertura y cierre del mercado mientras que las mechas superiores e inferiores marcan el mínimo y el máximo alcanzado durante el periodo analizado. Típicamente los colores verde y rojo indican que el precio de cierre fue mayor o menor que el precio de apertura, respectivamente.
+
+```{r}
+chartSeries(stock, theme = "white", name = "GOOGL")
+```
+
+Si bien se puede agregar medias móviles a los gráficos generados con la función _chartSeries()_, pasaremos a realizarlos con ggplot teniendo en cuenta solamente el precio de cierre del activo:
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(tidyverse)
+stock_data <- as.data.frame(stock)
+#Cambio los nombres de las columnas
+colnames(stock_data) <- unlist(lapply(strsplit(colnames(stock_data), "\\."), function(x){x[2]}))
+#columna con la información del tiempo
+stock_data$time = rownames(stock_data) %>% as.POSIXct()
+
+#Plot
+ggplot(stock_data) +
+  geom_line(aes(x = time, y = Close), linewidth = 1, linetype = "solid") +
+  labs(title = paste("Variación del Precio de GOOGL"),
+      x = "Fecha",
+      y = "Precio de Cierre") +
+  theme_minimal()
+```
+
+## Media Movil Simple (SMA)
+
+Comparemos el resultado de calcular medias móviles simples tomando diferente tamaño de ventana: 5, 20 y 50
+
+```{r, warning=FALSE}
+stock_data$sma5  <- SMA(Cl(stock_data), n = 5)
+stock_data$sma20 <- SMA(Cl(stock_data), n = 20)
+stock_data$sma50 <- SMA(Cl(stock_data), n = 50)
+
+ggplot(stock_data) +
+  geom_line(aes(x = time, y = Close, colour = "Precio"), linewidth = 1, linetype = "solid") +
+  geom_line(aes(x = time, y = sma5, colour = "SMA5"), linewidth = 1, linetype = "dashed") +
+  geom_line(aes(x = time, y = sma20, colour = "SMA20"), linewidth = 1, linetype = "dashed") +
+  geom_line(aes(x = time, y = sma50, colour = "SMA50"), linewidth = 1, linetype = "dashed") +
+  labs(title = paste("Variación del Precio de GOOGL"),
+       x = "Fecha",
+       y = "Precio de Cierre") +
+  scale_colour_manual("",
+                      breaks = c("Precio", "SMA5", "SMA20", "SMA50"),
+                      values = c("black", "red", "green", "blue")) +
+  theme_minimal()
+
+```
+
+## Media Movil Exponencial (EMA)
+
+De forma similar, podemos graficar EMA's con distinto tamaño de ventana
+
+```{r, warning=FALSE}
+stock_data$ema5  <- EMA(Cl(stock_data), n = 5)
+stock_data$ema20 <- EMA(Cl(stock_data), n = 20)
+stock_data$ema50 <- EMA(Cl(stock_data), n = 50)
+
+ggplot(stock_data) +
+  geom_line(aes(x = time, y = Close, colour = "Precio"), linewidth = 1, linetype = "solid") +
+  geom_line(aes(x = time, y = ema5, colour = "EMA5"), linewidth = 1, linetype = "dashed") +
+  geom_line(aes(x = time, y = ema20, colour = "EMA20"), linewidth = 1, linetype = "dashed") +
+  geom_line(aes(x = time, y = ema50, colour = "EMA50"), linewidth = 1, linetype = "dashed") +
+  labs(title = paste("Variación del Precio de GOOGL"),
+       x = "Fecha",
+       y = "Precio de Cierre") +
+  scale_colour_manual("",
+                      breaks = c("Precio", "EMA5", "EMA20", "EMA50"),
+                      values = c("black", "red", "green", "blue")) +
+  theme_minimal()
+
+```
+
+
+Por último, comparemos las SMA y las EMA utilizando la misma ventana en ambos casos:
+
+```{r, warning=FALSE}
+ggplot(stock_data) +
+  geom_line(aes(x = time, y = Close, colour = "Precio"), linewidth = 1, linetype = "solid") +
+  geom_line(aes(x = time, y = sma20, colour = "SMA20"), linewidth = 1, linetype = "dashed") +
+  geom_line(aes(x = time, y = ema20, colour = "EMA20"), linewidth = 1, linetype = "dashed") +
+  labs(title = paste("Variación del Precio de GOOGL"),
+       x = "Fecha",
+       y = "Precio de Cierre") +
+  scale_colour_manual("",
+                      breaks = c("Precio", "SMA20", "EMA20"),
+                      values = c("black", "red", "green")) +
+  theme_minimal()
+
+```
+
+Podemos ver que ante una misma ventana temporal, la EMA responde de forma más rápida a los cambios que la SMA.
+
+## LOESS
+Para aplicar la técnica de smoothing LOESS, podemos utilizar _geom_smooth()_. Con el parámetro _span_ podemos regular el grado de suavizado.
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(stock_data) +
+  geom_line(aes(x = time, y = Close, colour = "Precio"), linewidth = 1, linetype = "solid") +
+  geom_smooth(aes(x = time, y = Close, colour = "LOWESS - span=0.1"), 
+              method = "loess", span=0.1,se = FALSE) +
+  geom_smooth(aes(x = time, y = Close, colour = "LOWESS - span=0.5"), 
+              method = "loess", span=0.5,se = FALSE) +
+  geom_smooth(aes(x = time, y = Close, colour = "LOWESS - span=0.9"), 
+              method = "loess", span=0.9,se = FALSE) +
+  labs(title = paste("Variación del Precio de GOOGL"),
+       x = "Fecha",
+       y = "Precio de Cierre")+
+  scale_color_manual(values = c("Precio" = "black", 
+                                "LOWESS - span=0.1" = "red", 
+                                "LOWESS - span=0.5" = "green", 
+                                "LOWESS - span=0.9" = "purple")) +
+  theme_minimal()
+
+```
